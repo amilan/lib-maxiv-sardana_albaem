@@ -10,10 +10,10 @@ import PyTango
 # from sardana.pool import PoolUtil
 from sardana.pool.controller import CounterTimerController
 from sardana.pool import AcqTriggerType
-from sardana.pool.controller import NotMemorized  # MemorizedNoInit,
-from sardana.pool.controller import MaxDimSize  # Memorized,
+
 
 from .commons import ALBAEM_STATE_MAP
+from .commons import EXTRA_ATTRIBUTES
 
 
 class AlbaemCoTiCtrl(CounterTimerController):
@@ -39,75 +39,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
                                  'Type': 'PyTango.DevString'},
                   }
 
-    ctrl_extra_attributes = {"Range": {
-                                'Type': 'PyTango.DevString',
-                                'Description': 'Range for the channel',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "Filter": {
-                                'Type': 'PyTango.DevString',
-                                'Description': 'Filter for the channel',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "DInversion": {
-                                'Type': 'PyTango.DevString',
-                                'Description': 'Channel Digital inversion',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "Offset": {
-                                'Type': 'PyTango.DevDouble',
-                                'Description': 'Offset in % for the channel',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "SampleRate": {
-                                'Type': 'PyTango.DevDouble',
-                                'Description': 'Albaem sample rate',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "AutoRange": {
-                                'Type': 'PyTango.DevBoolean',
-                                'Description': 'Enable/Disable electrometer autorange',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             # attributes added for continuous acqusition mode
-                             "NrOfTriggers": {
-                                'Type': 'PyTango.DevLong',
-                                'Description': 'Nr of triggers',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "SamplingFrequency": {
-                                'Type': 'PyTango.DevDouble',
-                                'Description': 'Sampling frequency',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "AcquisitionTime": {
-                                'Type': 'PyTango.DevDouble',
-                                'Description': 'Acquisition time per trigger',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "TriggerMode": {
-                                'Type': 'PyTango.DevString',
-                                'Description': 'Trigger mode: soft or gate',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ_WRITE'
-                                },
-                             "Data": {
-                                'Type': [float],
-                                'Description': 'Trigger mode: soft or gate',
-                                'memorized': NotMemorized,
-                                'R/W Type': 'PyTango.READ',
-                                MaxDimSize: (1000000,)
-                                }
-                             }
+    axis_attributes = EXTRA_ATTRIBUTES
 
     def __init__(self, inst, props, *args, **kwargs):
         """Class initialization."""
@@ -349,97 +281,107 @@ class AlbaemCoTiCtrl(CounterTimerController):
             # TODO: Improve error handlig
             raise
 
-    def GetExtraAttributePar(self, axis, name):
-        """Read extra attributes."""
-        # TODO: Refactor this long method.
-        self._log.debug("GetExtraAttributePar(%d, %s): Entering...",
-                        axis, name)
-        if name.lower() == "range":
-            self.ranges[axis-2] = self.AemDevice['Ranges'].value[axis-2]
-            return self.ranges[axis-2]
-        if name.lower() == "filter":
-            self.filters[axis-2] = self.AemDevice['Filters'].value[axis-2]
-            return self.filters[axis-2]
-        if name.lower() == "dinversion":
-            attr = 'dInversion_ch'+str(axis-1)
-            self.dinversions[axis-2] = self.AemDevice[attr].value
-            return self.dinversions[axis-2]
-        if name.lower() == "offset":
-            attr = 'offset_percentage_ch'+str(axis-1)
-            self.offsets[axis-2] = self.AemDevice[attr].value
-            return self.offsets[axis-2]
-        if name.lower() == "samplerate":
-            attr = 'SampleRate'
-            self.sampleRate = self.AemDevice[attr].value
-            return self.sampleRate
-        if name.lower() == "autorange":
-            attr = 'Autorange'
-            autoRange = self.AemDevice[attr].value
-            return autoRange
-        # attributes used for continuous acquisition
-        if name.lower() == "samplingfrequency":
-            freq = 1 / self.AemDevice["samplerate"].value
-            return freq
-        if name.lower() == "triggermode":
-            mode = self.AemDevice["TriggerMode"].value
-            if mode == "INT":
-                return "soft"
-            if mode == "EXT":
-                return "gate"
-        if name.lower() == "nroftriggers":
-            nrOfTriggers = self.AemDevice["BufferSize"].value
-            return nrOfTriggers
-        if name.lower() == "acquisitiontime":
-            acqTime = self.AemDevice["AvSamples"].value
-            return acqTime
-        if name.lower() == "data":
-            data = self.AemDevice["BufferI%d" % (axis - 1)].value
-            return data
+    def getRange(self, axis):
+        self.ranges[axis-2] = self.AemDevice['Ranges'].value[axis-2]
+        return self.ranges[axis-2]
 
-    def SetExtraAttributePar(self,axis, name, value):
-        """Write extra attributes."""
-        # TODO: Refactor this long method.
-        if name.lower() == "range":
-            self.ranges[axis-2] = value
-            attr = 'range_ch' + str(axis-1)
-            self.AemDevice[attr] = str(value)
-        if name.lower() == "filter":
-            self.filters[axis-2] = value
-            attr = 'filter_ch' + str(axis-1)
-            self.AemDevice[attr] = str(value)
-        if name.lower() == "dinversion":
-            self.dinversions[axis-2] = value
-            attr = 'dInversion_ch' + str(axis-1)
-            self.AemDevice[attr] = str(value)
-        if name.lower() == "offset":
-            self.offsets[axis-2] = value
-            attr = 'offset_ch' + str(axis-1)
-            self.AemDevice[attr] = str(value)
-        if name.lower() == "samplerate":
-            self.sampleRate = value
-            attr = 'sampleRate'
-            self.AemDevice[attr] = value
-        if name.lower() == "autorange":
-            attr = 'AutoRange'
-            self.AemDevice[attr] = value
-        # attributes used for continuous acquisition
-        if name.lower() == "samplingfrequency":
-            maxFrequency = 1000
-            if value == -1 or value > maxFrequency:
-                value = maxFrequency  # -1 configures maximum frequency
-            rate = 1 / value
-            self.AemDevice["samplerate"] = rate
-        if name.lower() == "triggermode":
-            if value == "soft":
-                mode = "INT"
-            if value == "gate":
-                mode = "EXT"
-            self.AemDevice["TriggerMode"] = mode
-        if name.lower() == "nroftriggers":
-            self.AemDevice["BufferSize"] = value
-        if name.lower() == "acquisitiontime":
-            self.AemDevice["TriggerDelay"] = value
-            self.AemDevice["AvSamples"] = value
+    def getFilter(self, axis):
+        self.filters[axis-2] = self.AemDevice['Filters'].value[axis-2]
+        return self.filters[axis-2]
+
+    def getDInversion(self, axis):
+        attr = 'dInversion_ch'+str(axis-1)
+        self.dinversions[axis-2] = self.AemDevice[attr].value
+        return self.dinversions[axis-2]
+
+    def getOffset(self, axis):
+        attr = 'offset_percentage_ch'+str(axis-1)
+        self.offsets[axis-2] = self.AemDevice[attr].value
+        return self.offsets[axis-2]
+
+    def getSampleRate(self, axis):
+        attr = 'SampleRate'
+        self.sampleRate = self.AemDevice[attr].value
+        return self.sampleRate
+
+    def getAutoRange(self, axis):
+        attr = 'Autorange'
+        autoRange = self.AemDevice[attr].value
+        return autoRange
+
+    # attributes used for continuous acquisition
+    def getSamplingFrequency(self, axis):
+        freq = 1 / self.AemDevice["samplerate"].value
+        return freq
+
+    def getTriggerMode(self, axis):
+        mode = self.AemDevice["TriggerMode"].value
+        if mode == "INT":
+            return "soft"
+        if mode == "EXT":
+            return "gate"
+
+    def getNrOfTriggers(self, axis):
+        nrOfTriggers = self.AemDevice["BufferSize"].value
+        return nrOfTriggers
+
+    def getAcquisitionTime(self, axis):
+        acqTime = self.AemDevice["AvSamples"].value
+        return acqTime
+
+    def getData(self, axis):
+        data = self.AemDevice["BufferI%d" % (axis - 1)].value
+        return data
+
+    def setRange(self, axis, value):
+        self.ranges[axis-2] = value
+        attr = 'range_ch' + str(axis-1)
+        self.AemDevice[attr] = str(value)
+
+    def setFilter(self, axis, value):
+        self.filters[axis-2] = value
+        attr = 'filter_ch' + str(axis-1)
+        self.AemDevice[attr] = str(value)
+
+    def setDInversion(self, axis, value):
+        self.dinversions[axis-2] = value
+        attr = 'dInversion_ch' + str(axis-1)
+        self.AemDevice[attr] = str(value)
+
+    def setOffset(self, axis, value):
+        self.offsets[axis-2] = value
+        attr = 'offset_ch' + str(axis-1)
+        self.AemDevice[attr] = str(value)
+
+    def setSampleRate(self, axis, value):
+        self.sampleRate = value
+        attr = 'sampleRate'
+        self.AemDevice[attr] = value
+
+    def setAutoRange(self, axis, value):
+        attr = 'AutoRange'
+        self.AemDevice[attr] = value
+
+    def setSamplingFrequency(self, axis, value):
+        maxFrequency = 1000
+        if value == -1 or value > maxFrequency:
+            value = maxFrequency  # -1 configures maximum frequency
+        rate = 1 / value
+        self.AemDevice["samplerate"] = rate
+
+    def setTriggerMode(self, axis, value):
+        if value == "soft":
+            mode = "INT"
+        if value == "gate":
+            mode = "EXT"
+        self.AemDevice["TriggerMode"] = mode
+
+    def setNrOfTriggers(self, axis, value):
+        self.AemDevice["BufferSize"] = value
+
+    def setAcquisitionTime(self, axis, value):
+        self.AemDevice["TriggerDelay"] = value
+        self.AemDevice["AvSamples"] = value
 
     def SetCtrlPar(self, par, value):
         """Set controller parameters."""
