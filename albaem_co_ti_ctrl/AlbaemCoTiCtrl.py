@@ -13,6 +13,8 @@ from sardana.pool import AcqTriggerType
 from sardana.pool.controller import NotMemorized  # MemorizedNoInit,
 from sardana.pool.controller import MaxDimSize  # Memorized,
 
+from .commons import ALBAEM_STATE_MAP
+
 
 class AlbaemCoTiCtrl(CounterTimerController):
     """
@@ -140,8 +142,10 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.sampleRate = 0.0
         try:
             self.AemDevice = PyTango.DeviceProxy(self.Albaemname)
-            self.state = self.AemDevice.getEmState()
+            self.state = ALBAEM_STATE_MAP[str(self.AemDevice.state())]
+            self.status = self.AemDevice.status()
 
+        # TODO: Handle Exceptions properly
         except Exception as e:
             error_msg = "Could not connect with: {0}.".format(self.Albaemname)
             exception_msg = "Exception: {}".format(e)
@@ -165,12 +169,16 @@ class AlbaemCoTiCtrl(CounterTimerController):
     def StateOne(self, axis):
         """Read state of one axis."""
         self._log.debug("StateOne(%d): Entering...", axis)
-        return (self.state, 'Device present')
+        return (self.state, self.status)
 
     def StateAll(self):
         """Read state of all axis."""
         self._log.debug("StateAll(): Entering...")
-        self.state = self.evalState(self.AemDevice.getEmState())
+        # TODO: Add proper try/except (KeyError, AemDevice not responding)
+        _state = str(self.AemDevice.state())
+        self.status = self.AemDevice.status()
+        self.state = ALBAEM_STATE_MAP[_state]
+        # TODO: Should be return status here? ...
         return self.state
 
 #    def PreReadOne(self, axis):
@@ -340,29 +348,6 @@ class AlbaemCoTiCtrl(CounterTimerController):
             self._log.error(msg)
             # TODO: Improve error handlig
             raise
-
-    def evalState(self, state):
-        """Method to convert PyAlbaEm device states into counters state."""
-        # self._log.debug('evalState: #%s# len:%s'%(state, len(state)))
-        # NOTE: Thanks to the megaimportant requirement of changing the colors
-        #       depending the ranges, I have to change completely this function
-        #       ... again!
-
-        # TODO: Refactor this in order to use an _stateMap like
-        # _stateMap = {
-        #               'RUNNING': State.Moving,
-        #               'ON': State.On
-        #               'IDLE': State.On
-        # }
-
-        if state == 'RUNNING':
-            return PyTango.DevState.MOVING
-        elif state == 'ON':
-            return PyTango.DevState.ON
-        elif state == 'IDLE':
-            return PyTango.DevState.ON
-        else:
-            self._log.debug('Wrong state: %s', state)
 
     def GetExtraAttributePar(self, axis, name):
         """Read extra attributes."""
