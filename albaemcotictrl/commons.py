@@ -35,63 +35,63 @@ EXTRA_ATTRIBUTES = {
                             FGet: 'getFilter',
                             FSet: 'setFilter'
                             },
-                    "DInversion": {
+                    "Inversion": {
                             Type: str,
                             Description: 'Channel Digital inversion',
                             Memorize: NotMemorized,
                             Access: DataAccess.ReadWrite,
-                            FGet: 'getDInversion',
-                            FSet: 'setDInversion'
+                            FGet: 'getInversion',
+                            FSet: 'setInversion'
                             },
-                    "Offset": {
-                            Type: float,
-                            Description: 'Offset in % for the channel',
-                            Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
-                            FGet: 'getOffset',
-                            FSet: 'setOffset'
-                            },
-                    "SampleRate": {
-                            Type: float,
-                            Description: 'Albaem sample rate',
-                            Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
-                            FGet: 'getSampleRate',
-                            FSet: 'setSampleRate'
-                            },
-                    "AutoRange": {
-                            Type: bool,
-                            Description: 'Enable/Disable EM autorange',
-                            Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
-                            FGet: 'getAutoRange',
-                            FSet: 'setAutoRange'
-                            },
+                    # "Offset": {
+                    #         Type: float,
+                    #         Description: 'Offset in % for the channel',
+                    #         Memorize: NotMemorized,
+                    #         Access: DataAccess.ReadWrite,
+                    #         FGet: 'getOffset',
+                    #         FSet: 'setOffset'
+                    #         },
+                    # "SampleRate": {
+                    #         Type: float,
+                    #         Description: 'Albaem sample rate',
+                    #         Memorize: NotMemorized,
+                    #         Access: DataAccess.ReadWrite,
+                    #         FGet: 'getSampleRate',
+                    #         FSet: 'setSampleRate'
+                    #         },
+                    # "AutoRange": {
+                    #         Type: bool,
+                    #         Description: 'Enable/Disable EM autorange',
+                    #         Memorize: NotMemorized,
+                    #         Access: DataAccess.ReadWrite,
+                    #         FGet: 'getAutoRange',
+                    #         FSet: 'setAutoRange'
+                    #         },
                     # attributes added for continuous acqusition mode
                     "NrOfTriggers": {
                             Type: int,
                             Description: 'Nr of triggers',
                             Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
+                            Access: DataAccess.ReadOnly,
                             FGet: 'getNrOfTriggers',
-                            FSet: 'setNrOfTriggers'
+                            #FSet: 'setNrOfTriggers'
                             },
-                    "SamplingFrequency": {
-                            Type: float,
-                            Description: 'Sampling frequency',
-                            Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
-                            FGet: 'getSamplingFrequency',
-                            FSet: 'setSamplingFrequency'
-                            },
-                    "AcquisitionTime": {
-                            Type: float,
-                            Description: 'Acquisition time per trigger',
-                            Memorize: NotMemorized,
-                            Access: DataAccess.ReadWrite,
-                            FGet: 'getAcquisitionTime',
-                            FSet: 'setAcquisitionTime'
-                            },
+                    # "SamplingFrequency": {
+                    #         Type: float,
+                    #         Description: 'Sampling frequency',
+                    #         Memorize: NotMemorized,
+                    #         Access: DataAccess.ReadWrite,
+                    #         FGet: 'getSamplingFrequency',
+                    #         FSet: 'setSamplingFrequency'
+                    #         },
+                    # "AcquisitionTime": {
+                    #         Type: float,
+                    #         Description: 'Acquisition time per trigger',
+                    #         Memorize: NotMemorized,
+                    #         Access: DataAccess.ReadWrite,
+                    #         FGet: 'getAcquisitionTime',
+                    #         FSet: 'setAcquisitionTime'
+                    #         },
                     "TriggerMode": {
                             Type: str,
                             Description: 'Trigger mode: soft or gate',
