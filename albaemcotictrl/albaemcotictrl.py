@@ -29,14 +29,9 @@ __all__ = ['AlbaemCoTiCtrl']
 
 
 # State Map used to convert device server states into sardana states
-# ALBAEM_STATE_MAP = {
-#                     'RUNNING': State.Moving,
-#                     'ON': State.On,
-#                     'IDLE': State.On
-#                     }
 ALBAEM_STATE_MAP = {
                     'STATE_ACQUIRING': State.Moving,
-                    'STATE_ON': State.On,
+                    'STATE_ON': State.Standby,
                     'STATE_RUNNING': State.On
                     }
 
@@ -64,7 +59,9 @@ class AlbaemCoTiCtrl(CounterTimerController):
                                       'Type': 'PyTango.DevString'},
                        }
 
-    # Extra attributes definition
+    # NOTE: Extra attributes definition. It's done in this way because my idea
+    # is split this part into another file in order to improve readability and
+    # mainteinance.
     EXTRA_ATTRIBUTES = {
                         "Range": {
                                 Type: str,
@@ -90,6 +87,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
                                 FGet: 'getInversion',
                                 FSet: 'setInversion'
                                 },
+                        # TODO: Uncomment or remove them if not needed.
                         # "Offset": {
                         #         Type: float,
                         #         Description: 'Offset in % for the channel',
@@ -123,6 +121,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
                                 FGet: 'getNrOfTriggers',
                                 # FSet: 'setNrOfTriggers'
                                 },
+                        # TODO: Uncomment or remove them if not needed.
                         # "SamplingFrequency": {
                         #         Type: float,
                         #         Description: 'Sampling frequency',
@@ -169,20 +168,24 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
         self._master = None
         self._integration_time = 0.0
+
         # NOTE: this variable is not used at all ...
         # self.avSamplesMax = 1000
 
         # NOTE: Not sure that this is needed ...
         self._channels = []
 
-        # TODO: this is not a good idea, better change it. Maybe avoid ReadAll?
         # TODO: Refactor the initialization of self._measures
         # self._measures = ['0', '0', '0', '0']
         self._measures = []
 
+        # NOTE: the following attributes are not usefull at this moment ...
         self.lastvalues = []
         self.contAcqChannels = {}
         self.acqchannels = []
+        # NOTE: If I'm not wrong this is fixed now ...
+        self.sampleRate = 0.0
+
         self.state = None
 
         # TODO: Refactor the following lists
@@ -191,14 +194,10 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.dinversions = ['', '', '', '']
         self.offsets = ['', '', '', '']
 
-        self.sampleRate = 0.0
         try:
+            # NOTE: ... thinking about a AlbaEMProxy class to handle the comms
             self.AemDevice = PyTango.DeviceProxy(self.Albaemname)
-            state = (self.AemDevice['AcqState'].value).strip()
-            # TODO: When the DS will be ready, use this instead:
-            # self.state = ALBAEM_STATE_MAP[str(self.AemDevice.state())]
-            self.state = ALBAEM_STATE_MAP[state]
-            self.status = self.AemDevice.status()
+            self._ReadStateAndStatus()
 
         # TODO: Handle Exceptions properly
         except Exception as e:
@@ -209,12 +208,23 @@ class AlbaemCoTiCtrl(CounterTimerController):
             # WARNING: if you raise an exception here, the pool
             # will not start if the electrometer is switch off.
 
+    def _ReadStateAndStatus(self):
+        try:
+            state = (self.AemDevice['AcqState'].value).strip()
+            self.state = ALBAEM_STATE_MAP[state]
+            self.status = self.AemDevice.status()
+            print '    Read State finished with state: {}'.format(self.state)
+        # TODO: Improve the try/except please!
+        except Exception as exc:
+            self._log.error(exc)
+            raise
+
     def AddDevice(self, axis):
         """Add device to controller."""
         self._log.debug("AddDevice(%d): Entering...", axis)
         self._channels.append(axis)
         print 'Channel added: {}'.format(axis)
-        # TODO: Maybe this is better to be done in DS
+        # NOTE: As far as I know, this is not needed now.
         # self.AemDevice.enableChannel(axis)
 
     def DeleteDevice(self, axis):
@@ -235,15 +245,12 @@ class AlbaemCoTiCtrl(CounterTimerController):
         # TODO: Add proper try/except (KeyError, AemDevice not responding)
         # _state = str(self.AemDevice.state())
         try:
-            _state = (self.AemDevice['AcqState'].value).strip()
-            print 'StateAll: {}'.format(_state)
-            self.status = self.AemDevice.status()
-            # _state = 'STATE_ON'
-            self.state = ALBAEM_STATE_MAP[_state]
+            self._ReadStateAndStatus()
+            print 'StateAll: {}'.format(self.state)
             # TODO: Should be return status here? ...
             return self.state
-        except Exception as e:
-            print 'EXCEPTIONNNN in StateAll!!!!: {}'.format(e)
+        except Exception as exc:
+            print 'EXCEPTIONNNN in StateAll!!!!: {}'.format(exc)
 
 #    def PreReadOne(self, axis):
 #        self._log.debug("PreReadOne(%d): Entering...", axis)
@@ -251,7 +258,6 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
     def ReadOne(self, axis):
         """Read the value of one axis."""
-        # TODO: Read the channel buffer mean directly, avoid read all.
         msg = "ReadOne({}): Entering...".format(axis)
         self._log.debug(msg)
         print msg
@@ -261,32 +267,31 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
         if self._measures is not []:
             # TODO: Ensure that this is a valid value.
-            meas = float(self._measures[axis-2])
+            meas = self._measures[axis-2]
             print '  Value for axis {0}: {1}'.format(axis, meas)
             return meas
-            # return float(self._measures[axis-1])
+
+        # NOTE: old code used for tests, to be removed.
         # attr = 'AverageCurrentCh{}'.format(axis-1)
         # # attr = 'InstantCurrentCh{}'.format(axis-1)
         # average_current = self.AemDevice[attr].value
-        # print '    Instant current for attribute: {1}'.format(attr, average_current)
+        # print '    Instant current for attribute: {1}'.format(attr,
+        #                                                       average_current
+        #                                                      )
         # ndata = int(self.AemDevice['NData'].value)
         # print '        Number of triggers: {}'.format(ndata)
         # # self.AemDevice['AcqStop'] = '1'
         # return average_current
-        # # else:
-        # #     # NOTE: maybe ReadOne is called before measures is filled up.
-        # #     raise Exception('Last measured values not available.')
+
+        # TODO: Pending to handle properly when self._measures is []
+        # else:
+        #     # NOTE: maybe ReadOne is called before measures is filled up.
+        #     raise Exception('Last measured values not available.')
 
     def PreReadAll(self):
         self.readchannels = []
         self._log.debug("PreReadAll(): Entering...")
         print 'PreReadAll(): Entering ... '
-
-    def _send_sw_trigger(self):
-        trigger_mode = self.AemDevice['TriggerMode'].value
-        if trigger_mode.lower().strip() == 'software':
-            print '    Sending SWTrigger!'
-            self.AemDevice['SWTrigger'] = '1'
 
     def ReadAll(self):
         """Read all the axis."""
@@ -294,26 +299,27 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._log.debug("ReadAll(): Entering...")
         # if self.state == PyTango.DevState.ON:
 
-        _state = (self.AemDevice['AcqState'].value).strip()
-        print 'StateAll: {}'.format(_state)
-        self.status = self.AemDevice.status()
-        # _state = 'STATE_ON'
-        self.state = ALBAEM_STATE_MAP[_state]
-        print type(self.state)
+        self._ReadStateAndStatus()
+        print '    State when ReadAll: {}'.format(self.state)
         print self.state
 
         if self.state is not State.Moving:
-            self._send_sw_trigger()
+            self._SendSWTrigger()
 
-        if self.state == State.On:
-            # WARNING: Meas attribute has an horrible format, lets use
-            # AvgCurrent and once is working fine, refactor it an optimize it.
+        if self.state is State.On:
 
             self._measures = []
-            self._measures.append(self.AemDevice['AverageCurrentCh1'].value)
-            self._measures.append(self.AemDevice['AverageCurrentCh2'].value)
-            self._measures.append(self.AemDevice['AverageCurrentCh3'].value)
-            self._measures.append(self.AemDevice['AverageCurrentCh4'].value)
+            # TODO: This should be read in only one command, but extracting
+            # values from the MEAS attribute is not properly done yet.
+            # NOTE: It's not ok to use the average current if the buffer hasn't
+            # been cleaned after the previous scan. Is it cleared as the MEAS
+            # attribute?
+            for i in range(1, 5):
+                # attribute_name = 'AverageCurrentCh{}'.format(i)
+                attribute_name = 'CurrentCh{}'.format(i)
+                values = self.AemDevice[attribute_name].value
+                last_value = self._ExtractLastValue(values)
+                self._measures.append(last_value)
 
             # # TODO: Treat this response, because the expected values are not in
             # # the same format:
@@ -323,21 +329,45 @@ class AlbaemCoTiCtrl(CounterTimerController):
             # # TODO: maybe this shouldn't be done in the controller and it
             # # should be in the DS
             # # NOTE: Should we return the AverageCurrent instead?
-            # self._measures = self.extract_values(_measures)
+            # self._measures = self._ExtractAllValues(_measures)
             # print '    Measurements after extraction: {}'.format(self._measures)
 
-    def extract_values(self, measurements):
+    def _SendSWTrigger(self):
+        trigger_mode = self.AemDevice['TriggerMode'].value
+        if trigger_mode.lower().strip() == 'software':
+            print '    Sending SWTrigger!'
+            self.AemDevice['SWTrigger'] = '1'
+
+    def _ExtractLastValue(self, values):
+        print 'Ready to extract values from: {}'.format(values)
+        last_value = None
+        try:
+            last_value = float(values.strip('[]\r').split(',')[-1])
+            print '    Last value = {}'.format(last_value)
+            return last_value
+        except Exception as e:
+            print 'Error extracting last value'
+
+    def _ExtractAllValues(self, measurements):
         """
-        Simply remove the firs string returned.
+        Extract the last value acquired.
 
         We know the channel by the position in the array. This could be
         improved and use a proper data structure.
         """
-        print '    Extracting values!'.format()
+        print '    Extracting values for: {}'.format(measurements)
         # [['CHAN01','[1, 2, ...]'], ...]
-        list_of_values = [meas[1] for meas in measurements]
+        # list_of_values = [meas[1] for meas in measurements]
         # ['[]','[]', ...]
-        m = [meas[1].strip("[]").split(',')[-1] for meas in measurements]
+        # m = [meas[1].strip("[]").split(',')[-1] for meas in measurements]
+
+        values = []
+        for meas in measurements:
+            print "    Meas: {}".format(meas)
+            if meas[1] is not '[]':
+                values.append(meas[1].strip("[]").split(',')[-1])
+            else:
+                print '    Values were empty!!!!'
         print '    Extracted values: {}'.format(m)
         return m
 
@@ -351,14 +381,19 @@ class AlbaemCoTiCtrl(CounterTimerController):
     def AbortAll(self):
         """Stop all the acquisitions."""
         self._log.debug("AbortAll(): Entering...")
-        # state = self.AemDevice.getEmState()
+        self._StopAcquisition()
 
-        # NOTE: should we update self.state?
-        # state = str(self.AemDevice.state())
-        state = (self.AemDevice['AcqState'].value).strip()
-        if state == 'STATE_ACQUIRING' or state == 'STATE_RUNNING':
-            # self.AemDevice.Stop()
-            self.AemDevice['AcqStop'] = '1'
+    # TODO: Add decorator ensure_comms
+    def _StopAcquisition(self):
+        # NOTE: If we always send the AcqStop, we don't need to read the state
+        # self._ReadStateAndStatus()
+
+        # NOTE: this if is useless it will be always true
+        # if self.state == 'STATE_ACQUIRING' or self.state == 'STATE_RUNNING':
+        # NOTE: up to now I haven't seen any problem stopping acq like this
+        # even if it's already stopped.
+
+        self.AemDevice['AcqStop'] = '1'
 
     def PreStartAllCT(self):
         """Configure acquisition before start it."""
@@ -367,17 +402,9 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.acqchannels = []
 
         try:
-            # NOTE: Should we update the self.state?
-            # state = str(self.AemDevice.state())
-            state = (self.AemDevice['AcqState'].value).strip()
-            # state = self.AemDevice.getEmState()
-            # PyTango.DevState.RUNNING:
-            if state == 'STATE_ACQUIRING' or state == 'STATE_RUNNING':
-                self.AemDevice['AcqStop'] = '1'
-            # PyTango.DevState.STANDBY:
-            # elif state == 'STATE_ON':
-            #     self.AemDevice['AcqStart'] = '1'
+            self._StopAcquisition()
         except Exception as e:
+            # TODO: Create a decorator to handle this kind of exceptions.
             error_msg = 'Error configuring device: {}'.format(self.Albaemname)
             exception_msg = 'Exception: {}'.format(e)
             msg = 'PreStartAllCt(): {0}\n{1}'.format(error_msg, exception_msg)
@@ -413,14 +440,12 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._log.debug("StartAllCT(): Entering...")
         print 'StartAllCT(): Entering ...'
         try:
-            # if self.state == PyTango.DevState.ON:
-            state = (self.AemDevice['AcqState'].value).strip()
-            # state = self.AemDevice.getEmState()
-            # PyTango.DevState.RUNNING:
-            if state == 'STATE_ON':
+            self._ReadStateAndStatus()
+            if self.state == State.Standby:
                 self.AemDevice['AcqStart'] = '1'
 
         except Exception as e:
+            # TODO: Again ... a decorator here will make the code cleaner.
             error_msg = 'Could not start acquisition on: {}'.format(
                                                                self.Albaemname)
             exception_msg = 'Exception: {}'.format(e)
@@ -461,11 +486,12 @@ class AlbaemCoTiCtrl(CounterTimerController):
         try:
             # TODO: Do we want this? Let's configure it by hand at the begining
             if axis == 1:
-                self.AemDevice['AcqStop'] = str(1)
-                # TODO: Solve this bug: acqtime must be sent twice
+                self.AemDevice['AcqStop'] = '1'
+                # TODO: Solve this bug: acqtime must be sent twice ... weird
+                # UPDATE: it's even worst ... it's not working ...
                 val = str(int(value * 1000))
-                self.AemDevice['AcqTime'] = val
-                self.AemDevice['AcqTime'] = val
+                for i in range(2):
+                    self.AemDevice['AcqTime'] = val
             #
             #     # TODO: This part is still not fully tested###########
             #     # self.sampleRate = self.AemDevice['SampleRate'].value
@@ -637,7 +663,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     else:
     #         super(AlbaemCoTiCtrl, self).SetCtrlPar(par, value)
 
-    # NOTE: Not sure if it's needed
+    # NOTE: Not sure if this is needed
     # def SendToCtrl(self, cmd):
     #     """Send a command to the controller."""
     #     cmd = cmd.lower()
@@ -680,6 +706,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     return ret
 
 if __name__ == "__main__":
+    # TODO: move this code to a test unter ../tests
     #import time
     #obj = AlbaemCoTiCtrl('test',{'Albaemname':'ELEM01R42-020-bl29.cells.es','SampleRate':1000})
     obj = AlbaemCoTiCtrl('test',{'Albaemname':'amilan/emet/01','SampleRate':1000})
