@@ -11,29 +11,22 @@ import PyTango
 from sardana.pool.controller import CounterTimerController
 # from sardana.pool import AcqTriggerType
 
-from sardana import DataAccess
-from sardana.pool.controller import NotMemorized  # MemorizedNoInit,
-from sardana.pool.controller import MaxDimSize  # Memorized,
-
-from sardana.pool.controller import Type, Description, DefaultValue, Memorize
-from sardana.pool.controller import Access, FGet, FSet
+# from sardana import DataAccess
+# from sardana.pool.controller import NotMemorized  # MemorizedNoInit,
+# from sardana.pool.controller import MaxDimSize  # Memorized,
+#
+# from sardana.pool.controller import Type, Description, DefaultValue, Memorize
+# from sardana.pool.controller import Access, FGet, FSet
 
 from sardana import State
 
-# from .commons import ALBAEM_STATE_MAP
-# from .commons import EXTRA_ATTRIBUTES
+from commons import ALBAEM_STATE_MAP
+from attributes import EXTRA_ATTRIBUTES
+from decorators import alert_problems
 
 __author__ = 'amilan'
 __docformat__ = 'restructuredtext'
 __all__ = ['AlbaemCoTiCtrl']
-
-
-# State Map used to convert device server states into sardana states
-ALBAEM_STATE_MAP = {
-                    'STATE_ACQUIRING': State.Moving,
-                    'STATE_ON': State.Standby,
-                    'STATE_RUNNING': State.On
-                    }
 
 
 class AlbaemCoTiCtrl(CounterTimerController):
@@ -58,103 +51,6 @@ class AlbaemCoTiCtrl(CounterTimerController):
     ctrl_properties = {'Albaemname': {'Description': 'Albaem DS name',
                                       'Type': 'PyTango.DevString'},
                        }
-
-    # NOTE: Extra attributes definition. It's done in this way because my idea
-    # is split this part into another file in order to improve readability and
-    # mainteinance.
-    EXTRA_ATTRIBUTES = {
-                        "Range": {
-                                Type: str,
-                                Description: 'Range for the channel',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadWrite,
-                                FGet: 'getRange',
-                                FSet: 'setRange'
-                                },
-                        "Filter": {
-                                Type: str,
-                                Description: 'Filter for the channel',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadWrite,
-                                FGet: 'getFilter',
-                                FSet: 'setFilter'
-                                },
-                        "Inversion": {
-                                Type: str,
-                                Description: 'Channel Digital inversion',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadWrite,
-                                FGet: 'getInversion',
-                                FSet: 'setInversion'
-                                },
-                        # TODO: Uncomment or remove them if not needed.
-                        # "Offset": {
-                        #         Type: float,
-                        #         Description: 'Offset in % for the channel',
-                        #         Memorize: NotMemorized,
-                        #         Access: DataAccess.ReadWrite,
-                        #         FGet: 'getOffset',
-                        #         FSet: 'setOffset'
-                        #         },
-                        # "SampleRate": {
-                        #         Type: float,
-                        #         Description: 'Albaem sample rate',
-                        #         Memorize: NotMemorized,
-                        #         Access: DataAccess.ReadWrite,
-                        #         FGet: 'getSampleRate',
-                        #         FSet: 'setSampleRate'
-                        #         },
-                        # "AutoRange": {
-                        #         Type: bool,
-                        #         Description: 'Enable/Disable EM autorange',
-                        #         Memorize: NotMemorized,
-                        #         Access: DataAccess.ReadWrite,
-                        #         FGet: 'getAutoRange',
-                        #         FSet: 'setAutoRange'
-                        #         },
-                        # attributes added for continuous acqusition mode
-                        "NrOfTriggers": {
-                                Type: int,
-                                Description: 'Nr of triggers',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadOnly,
-                                FGet: 'getNrOfTriggers',
-                                # FSet: 'setNrOfTriggers'
-                                },
-                        # TODO: Uncomment or remove them if not needed.
-                        # "SamplingFrequency": {
-                        #         Type: float,
-                        #         Description: 'Sampling frequency',
-                        #         Memorize: NotMemorized,
-                        #         Access: DataAccess.ReadWrite,
-                        #         FGet: 'getSamplingFrequency',
-                        #         FSet: 'setSamplingFrequency'
-                        #         },
-                        # "AcquisitionTime": {
-                        #         Type: float,
-                        #         Description: 'Acquisition time per trigger',
-                        #         Memorize: NotMemorized,
-                        #         Access: DataAccess.ReadWrite,
-                        #         FGet: 'getAcquisitionTime',
-                        #         FSet: 'setAcquisitionTime'
-                        #         },
-                        "TriggerMode": {
-                                Type: str,
-                                Description: 'Trigger mode: soft or gate',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadWrite,
-                                FGet: 'getTriggerMode',
-                                FSet: 'setTriggerMode'
-                                },
-                        "Data": {
-                                Type: [float],
-                                Description: 'Data array',
-                                Memorize: NotMemorized,
-                                Access: DataAccess.ReadOnly,
-                                MaxDimSize: (1000000,),
-                                FGet: 'getData'
-                                }
-                             }
 
     axis_attributes = EXTRA_ATTRIBUTES
 
@@ -194,30 +90,21 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.dinversions = ['', '', '', '']
         self.offsets = ['', '', '', '']
 
-        try:
-            # NOTE: ... thinking about a AlbaEMProxy class to handle the comms
-            self.AemDevice = PyTango.DeviceProxy(self.Albaemname)
-            self._ReadStateAndStatus()
+        self._ConnectToAlbaEM()
+        self._ReadStateAndStatus()
 
-        # TODO: Handle Exceptions properly
-        except Exception as e:
-            error_msg = "Could not connect with: {0}.".format(self.Albaemname)
-            exception_msg = "Exception: {}".format(e)
-            msg = '__init__(): {2}\n{1}'.format(error_msg, exception_msg)
-            self._log.error(msg)
-            # WARNING: if you raise an exception here, the pool
-            # will not start if the electrometer is switch off.
+    @alert_problems
+    def _ConnectToAlbaEM(self):
+        # NOTE: ... thinking about a AlbaEMProxy class to handle the comms
+        self.AemDevice = PyTango.DeviceProxy(self.Albaemname)
 
+    @alert_problems
     def _ReadStateAndStatus(self):
-        try:
-            state = (self.AemDevice['AcqState'].value).strip()
-            self.state = ALBAEM_STATE_MAP[state]
-            self.status = self.AemDevice.status()
-            print '    Read State finished with state: {}'.format(self.state)
-        # TODO: Improve the try/except please!
-        except Exception as exc:
-            self._log.error(exc)
-            raise
+        state = (self.AemDevice['AcqState'].value).strip()
+        self.state = ALBAEM_STATE_MAP[state]
+        self.status = self.AemDevice.status()
+        print '    Read State finished with state: {}'.format(self.state)
+        # NOTE: maybe we should handle also the state to Fault!!
 
     def AddDevice(self, axis):
         """Add device to controller."""
@@ -242,15 +129,10 @@ class AlbaemCoTiCtrl(CounterTimerController):
     def StateAll(self):
         """Read state of all axis."""
         self._log.debug("StateAll(): Entering...")
-        # TODO: Add proper try/except (KeyError, AemDevice not responding)
-        # _state = str(self.AemDevice.state())
-        try:
-            self._ReadStateAndStatus()
-            print 'StateAll: {}'.format(self.state)
-            # TODO: Should be return status here? ...
-            return self.state
-        except Exception as exc:
-            print 'EXCEPTIONNNN in StateAll!!!!: {}'.format(exc)
+        self._ReadStateAndStatus()
+        print 'StateAll: {}'.format(self.state)
+        # TODO: Should be return status here? ...
+        return self.state
 
 #    def PreReadOne(self, axis):
 #        self._log.debug("PreReadOne(%d): Entering...", axis)
@@ -317,8 +199,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
             for i in range(1, 5):
                 # attribute_name = 'AverageCurrentCh{}'.format(i)
                 attribute_name = 'CurrentCh{}'.format(i)
-                values = self.AemDevice[attribute_name].value
-                last_value = self._ExtractLastValue(values)
+                last_value = self._ExtractLastValue(attribute_name)
                 self._measures.append(last_value)
 
             # # TODO: Treat this response, because the expected values are not in
@@ -332,21 +213,20 @@ class AlbaemCoTiCtrl(CounterTimerController):
             # self._measures = self._ExtractAllValues(_measures)
             # print '    Measurements after extraction: {}'.format(self._measures)
 
+    @alert_problems
     def _SendSWTrigger(self):
         trigger_mode = self.AemDevice['TriggerMode'].value
         if trigger_mode.lower().strip() == 'software':
             print '    Sending SWTrigger!'
             self.AemDevice['SWTrigger'] = '1'
 
-    def _ExtractLastValue(self, values):
+    @alert_problems
+    def _ExtractLastValue(self, attribute_name):
+        values = self.AemDevice[attribute_name].value
         print 'Ready to extract values from: {}'.format(values)
-        last_value = None
-        try:
-            last_value = float(values.strip('[]\r').split(',')[-1])
-            print '    Last value = {}'.format(last_value)
-            return last_value
-        except Exception as e:
-            print 'Error extracting last value'
+        last_value = float(values.strip('[]\r').split(',')[-1])
+        print '    Last value = {}'.format(last_value)
+        return last_value
 
     def _ExtractAllValues(self, measurements):
         """
@@ -378,12 +258,13 @@ class AlbaemCoTiCtrl(CounterTimerController):
 #        if state == PyTango.DevState.RUNNING:
 #            self.AemDevice.Stop()
 
+    @alert_problems
     def AbortAll(self):
         """Stop all the acquisitions."""
         self._log.debug("AbortAll(): Entering...")
         self._StopAcquisition()
 
-    # TODO: Add decorator ensure_comms
+    @alert_problems
     def _StopAcquisition(self):
         # NOTE: If we always send the AcqStop, we don't need to read the state
         # self._ReadStateAndStatus()
@@ -401,16 +282,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         print 'PreStartAllCT(): Entering ...'
         self.acqchannels = []
 
-        try:
-            self._StopAcquisition()
-        except Exception as e:
-            # TODO: Create a decorator to handle this kind of exceptions.
-            error_msg = 'Error configuring device: {}'.format(self.Albaemname)
-            exception_msg = 'Exception: {}'.format(e)
-            msg = 'PreStartAllCt(): {0}\n{1}'.format(error_msg, exception_msg)
-            self._log.error(msg)
-            # TODO: raise the proper exception.
-            raise
+        # NOTE: If we only write the AcqStop attribute the method is useless
+        self._StopAcquisition()
 
     def PreStartOneCT(self, axis):
         """
@@ -431,6 +304,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     self._log.debug("StartOneCT(%d): Entering...", axis)
     #     return True
 
+    @alert_problems
     def StartAllCT(self):
         """Start acquisition for all channels in electrometer.
 
@@ -439,25 +313,12 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         self._log.debug("StartAllCT(): Entering...")
         print 'StartAllCT(): Entering ...'
-        try:
-            self._ReadStateAndStatus()
-            if self.state == State.Standby:
-                self.AemDevice['AcqStart'] = '1'
-
-        except Exception as e:
-            # TODO: Again ... a decorator here will make the code cleaner.
-            error_msg = 'Could not start acquisition on: {}'.format(
-                                                               self.Albaemname)
-            exception_msg = 'Exception: {}'.format(e)
-            msg = 'StartAllCT(): {0}\n{1}'.format(error_msg, exception_msg)
-            self._log.error(msg)
-            # TODO: improve exception handling.
-            raise
+        self._ReadStateAndStatus()
+        if self.state == State.Standby:
+            self.AemDevice['AcqStart'] = '1'
 
     def PreLoadOne(self, axis, value):
-        """
-        Configuration needed before loading an axis.
-        """
+        """Configuration needed before loading an axis."""
         msg = "PreLoadOne({0}, {1}): Entering...".format(axis, value)
         self._log.debug("PreLoadOne(%d, %f): Entering...", axis, value)
         print msg
@@ -532,6 +393,11 @@ class AlbaemCoTiCtrl(CounterTimerController):
             # TODO: Improve error handlig
             raise
 
+    # NOTE: Kind of ugly to have the definition and implementation in different
+    #       files ... think about how to better connect them. The main problem
+    #       at this time, it's the AemDevice instance, which is created in the
+    #       controller ...
+    @alert_problems
     def getRange(self, axis):
         attr = 'CARangeCh{}'.format(axis)
         # NOTE: axis - 2 because it start in 1 and the 1st is the timer.
@@ -540,11 +406,13 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.ranges[axis-2] = self.AemDevice[attr].value
         return self.ranges[axis-2]
 
+    @alert_problems
     def getFilter(self, axis):
         attr = 'CAFilterCh{}'.format(axis)
         self.filters[axis-2] = self.AemDevice[attr].value
         return self.filters[axis-2]
 
+    @alert_problems
     def getInversion(self, axis):
         attr = 'CAInversionCh{}'.format(axis)
         self.dinversions[axis-2] = self.AemDevice[attr].value
@@ -572,6 +440,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     freq = 1 / self.AemDevice["samplerate"].value
     #     return freq
 
+    @alert_problems
     def getTriggerMode(self, axis):
         # TODO: Refactor this!
         mode = self.AemDevice["TriggerMode"].value
@@ -580,6 +449,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         # if mode == "EXT":
         #     return "gate"
 
+    @alert_problems
     def getNrOfTriggers(self, axis):
         nrOfTriggers = int(self.AemDevice["NData"].value)
         return nrOfTriggers
@@ -588,21 +458,25 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     acqTime = self.AemDevice["AvSamples"].value
     #     return acqTime
 
+    @alert_problems
     def getData(self, axis):
         attr = 'CurrentCh{}'.format(axis-1)
         data = self.AemDevice[attr].value
         return data
 
+    @alert_problems
     def setRange(self, axis, value):
         self.ranges[axis-2] = value
         attr = 'CARangeCh{}' + str(axis-1)
         self.AemDevice[attr] = str(value)
 
+    @alert_problems
     def setFilter(self, axis, value):
         self.filters[axis-2] = value
         attr = 'CAFilterCh{}' + str(axis-1)
         self.AemDevice[attr] = str(value)
 
+    @alert_problems
     def setInversion(self, axis, value):
         self.dinversions[axis-2] = value
         attr = 'CAInversionCh{}' + str(axis-1)
@@ -630,6 +504,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     rate = 1 / value
     #     self.AemDevice["samplerate"] = rate
 
+    @alert_problems
     def setTriggerMode(self, axis, value):
         # TODO: Ensure this works like this
         if value.lower() == "software":
