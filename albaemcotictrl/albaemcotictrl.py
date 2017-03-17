@@ -4,6 +4,8 @@
 """Sardana Controller for the AlbaEM#."""
 
 # import logging
+import time
+
 import PyTango
 
 # from sardana import pool
@@ -170,10 +172,11 @@ class AlbaemCoTiCtrl(CounterTimerController):
         #     # NOTE: maybe ReadOne is called before measures is filled up.
         #     raise Exception('Last measured values not available.')
 
-    def PreReadAll(self):
-        self.readchannels = []
-        self._log.debug("PreReadAll(): Entering...")
-        print 'PreReadAll(): Entering ... '
+    # NOTE: Not in use ...
+    # def PreReadAll(self):
+    #     self.readchannels = []
+    #     self._log.debug("PreReadAll(): Entering...")
+    #     print 'PreReadAll(): Entering ... '
 
     def ReadAll(self):
         """Read all the axis."""
@@ -228,35 +231,37 @@ class AlbaemCoTiCtrl(CounterTimerController):
         print '    Last value = {}'.format(last_value)
         return last_value
 
-    def _ExtractAllValues(self, measurements):
-        """
-        Extract the last value acquired.
+    # TODO: To be used once is used by ReadAll
+    # def _ExtractAllValues(self, measurements):
+    #     """
+    #     Extract the last value acquired.
+    #
+    #     We know the channel by the position in the array. This could be
+    #     improved and use a proper data structure.
+    #     """
+    #     print '    Extracting values for: {}'.format(measurements)
+    #     # [['CHAN01','[1, 2, ...]'], ...]
+    #     # list_of_values = [meas[1] for meas in measurements]
+    #     # ['[]','[]', ...]
+    #     # m = [meas[1].strip("[]").split(',')[-1] for meas in measurements]
+    #
+    #     values = []
+    #     for meas in measurements:
+    #         print "    Meas: {}".format(meas)
+    #         if meas[1] is not '[]':
+    #             values.append(meas[1].strip("[]").split(',')[-1])
+    #         else:
+    #             print '    Values were empty!!!!'
+    #     print '    Extracted values: {}'.format(m)
+    #     return m
 
-        We know the channel by the position in the array. This could be
-        improved and use a proper data structure.
-        """
-        print '    Extracting values for: {}'.format(measurements)
-        # [['CHAN01','[1, 2, ...]'], ...]
-        # list_of_values = [meas[1] for meas in measurements]
-        # ['[]','[]', ...]
-        # m = [meas[1].strip("[]").split(',')[-1] for meas in measurements]
-
-        values = []
-        for meas in measurements:
-            print "    Meas: {}".format(meas)
-            if meas[1] is not '[]':
-                values.append(meas[1].strip("[]").split(',')[-1])
-            else:
-                print '    Values were empty!!!!'
-        print '    Extracted values: {}'.format(m)
-        return m
-
-    def AbortOne(self, axis):
-        """Stop the acquisition for one axis."""
-        self._log.debug("AbortOne(%d): Entering...", axis)
-#        state = self.AemDevice['state']
-#        if state == PyTango.DevState.RUNNING:
-#            self.AemDevice.Stop()
+    # NOTE: We don't really need reimplement this method now.
+#     def AbortOne(self, axis):
+#         """Stop the acquisition for one axis."""
+#         self._log.debug("AbortOne(%d): Entering...", axis)
+# #        state = self.AemDevice['state']
+# #        if state == PyTango.DevState.RUNNING:
+# #            self.AemDevice.Stop()
 
     @alert_problems
     def AbortAll(self):
@@ -285,19 +290,20 @@ class AlbaemCoTiCtrl(CounterTimerController):
         # NOTE: If we only write the AcqStop attribute the method is useless
         self._StopAcquisition()
 
-    def PreStartOneCT(self, axis):
-        """
-        Record axis to be started.
-
-        Record axis to be started so later on we can distinguish if we are
-        starting only the master channel.
-        """
-        msg = "PreStartOneCT({}): Entering...".format(axis)
-        self._log.debug("PreStartOneCT(%d): Entering...", axis)
-        print msg
-        # NOTE: Not sure if this is worthy.
-        self.acqchannels.append(axis)
-        return True
+    # NOTE: Not really useful right now.
+    # def PreStartOneCT(self, axis):
+    #     """
+    #     Record axis to be started.
+    #
+    #     Record axis to be started so later on we can distinguish if we are
+    #     starting only the master channel.
+    #     """
+    #     msg = "PreStartOneCT({}): Entering...".format(axis)
+    #     self._log.debug("PreStartOneCT(%d): Entering...", axis)
+    #     print msg
+    #     # NOTE: Not sure if this is worthy.
+    #     self.acqchannels.append(axis)
+    #     return True
 
     # def StartOneCT(self, axis):
     #     """Start acquisitionfor one axis."""
@@ -317,17 +323,18 @@ class AlbaemCoTiCtrl(CounterTimerController):
         if self.state == State.Standby:
             self.AemDevice['AcqStart'] = '1'
 
-    def PreLoadOne(self, axis, value):
-        """Configuration needed before loading an axis."""
-        msg = "PreLoadOne({0}, {1}): Entering...".format(axis, value)
-        self._log.debug("PreLoadOne(%d, %f): Entering...", axis, value)
-        print msg
-        # TODO: This shouldn't be under an if axis == 1 ???
-        if axis == 1:
-            self._master = None
-        # NOTE: WAIT a second ... do we really need self._master??
-        # TODO: Do we need to return True? It's quite ugly.
-        return True
+    # TODO: Ensure that this method is needed.
+    # def PreLoadOne(self, axis, value):
+    #     """Configuration needed before loading an axis."""
+    #     msg = "PreLoadOne({0}, {1}): Entering...".format(axis, value)
+    #     self._log.debug("PreLoadOne(%d, %f): Entering...", axis, value)
+    #     print msg
+    #     # TODO: This shouldn't be under an if axis == 1 ???
+    #     if axis == 1:
+    #         self._master = None
+    #     # NOTE: WAIT a second ... do we really need self._master??
+    #     # TODO: Do we need to return True? It's quite ugly.
+    #     return True
 
     def LoadOne(self, axis, value):
         """
@@ -346,13 +353,16 @@ class AlbaemCoTiCtrl(CounterTimerController):
             self._integration_time = value
         try:
             # TODO: Do we want this? Let's configure it by hand at the begining
+            # NOTE: Yes, we want this executed only one time, and not per axis.
             if axis == 1:
                 self.AemDevice['AcqStop'] = '1'
+                # NOTE: if we don't wait a little bit, the acqtime is not configured.
+                time.sleep(0.5)
                 # TODO: Solve this bug: acqtime must be sent twice ... weird
                 # UPDATE: it's even worst ... it's not working ...
                 val = str(int(value * 1000))
-                for i in range(2):
-                    self.AemDevice['AcqTime'] = val
+                #for i in range(2):
+                self.AemDevice['AcqTime'] = val
             #
             #     # TODO: This part is still not fully tested###########
             #     # self.sampleRate = self.AemDevice['SampleRate'].value
@@ -579,61 +589,3 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #             else:
     #                 ret = "Channel %d popped from contAcqChannels" % axis
     #     return ret
-
-if __name__ == "__main__":
-    # TODO: move this code to a test unter ../tests
-    #import time
-    #obj = AlbaemCoTiCtrl('test',{'Albaemname':'ELEM01R42-020-bl29.cells.es','SampleRate':1000})
-    obj = AlbaemCoTiCtrl('test',{'Albaemname':'amilan/emet/01','SampleRate':1000})
-    obj.AddDevice(1)
-    obj.AddDevice(2)
-    obj.AddDevice(3)
-    obj.AddDevice(4)
-    obj.AddDevice(5)
-    obj.LoadOne(1,1)
-    print obj.PreStartAllCT()
-    #print obj.AemDevice.setFilters([['1', 'NO'],['2', 'NO'],['3', 'NO'],['4', 'NO']])
-    #print obj.AemDevice.setRanges([['1', '1mA'],['2', '1mA'],['3', '1mA'],['4', '1mA']])
-    print obj.StartOneCT(1)
-    print obj.StartOneCT(2)
-    print obj.StartOneCT(3)
-    print obj.StartOneCT(4)
-    print obj.StartOneCT(5)
-    print obj.StartAllCT()
-    ans = obj.StateOne(1)
-    ans = obj.StateOne(2)
-    ans = obj.StateOne(3)
-    ans = obj.StateOne(4)
-    ans = obj.StateOne(5)
-    ans = obj.StateAll()
-    print ans
-    i = 0
-    while ans == PyTango.DevState.MOVING:
-        print "ans:", ans
-        #time.sleep(0.3)
-        ans = obj.StateOne(1)
-        ans = obj.StateOne(2)
-        ans = obj.StateOne(3)
-        ans = obj.StateOne(4)
-        ans = obj.StateOne(5)
-        ans = obj.StateAll()
-        print obj.ReadAll()
-        print obj.ReadOne(1)
-        print obj.ReadOne(2)
-        print obj.ReadOne(3)
-        print obj.ReadOne(4)
-        print obj.ReadOne(5)
-        print "State is running: %s"%i
-        i = i + 1
-    print "ans:", ans
-    print obj.ReadAll()
-    print obj.ReadOne(1)
-    print obj.ReadOne(2)
-    print obj.ReadOne(3)
-    print obj.ReadOne(4)
-    print obj.ReadOne(5)
-    obj.DeleteDevice(1)
-    obj.DeleteDevice(2)
-    obj.DeleteDevice(3)
-    obj.DeleteDevice(4)
-    obj.DeleteDevice(5)
