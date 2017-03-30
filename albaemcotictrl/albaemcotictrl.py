@@ -184,15 +184,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._log.debug("ReadAll(): Entering...")
         # if self.state == PyTango.DevState.ON:
 
-        self._ReadStateAndStatus()
-        print '    State when ReadAll: {}'.format(self.state)
-        print self.state
-
+        # if self.state is State.On or self.state is State.Standby:
         if self.state is not State.Moving:
-            self._SendSWTrigger()
-
-        if self.state is State.On:
-
             self._measures = []
             # TODO: This should be read in only one command, but extracting
             # values from the MEAS attribute is not properly done yet.
@@ -225,11 +218,14 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
     @alert_problems
     def _ExtractLastValue(self, attribute_name):
-        values = self.AemDevice[attribute_name].value
-        print 'Ready to extract values from: {}'.format(values)
-        last_value = float(values.strip('[]\r').split(',')[-1])
-        print '    Last value = {}'.format(last_value)
-        return last_value
+        try:
+            values = self.AemDevice[attribute_name].value
+            print 'Ready to extract values from: {}'.format(values)
+            last_value = float(values.strip('[]\r').split(',')[-1])
+            print '    Last value = {}'.format(last_value)
+            return last_value
+        except Exception as e:
+            return None
 
     # TODO: To be used once is used by ReadAll
     # def _ExtractAllValues(self, measurements):
@@ -288,7 +284,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.acqchannels = []
 
         # NOTE: If we only write the AcqStop attribute the method is useless
-        self._StopAcquisition()
+        # self._StopAcquisition()
 
     # NOTE: Not really useful right now.
     # def PreStartOneCT(self, axis):
@@ -322,6 +318,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._ReadStateAndStatus()
         if self.state == State.Standby:
             self.AemDevice['AcqStart'] = '1'
+            self._SendSWTrigger()
 
     # TODO: Ensure that this method is needed.
     # def PreLoadOne(self, axis, value):
@@ -336,6 +333,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
     #     # TODO: Do we need to return True? It's quite ugly.
     #     return True
 
+    @alert_problems
     def LoadOne(self, axis, value):
         """
         Load one axis in controller.
@@ -345,63 +343,21 @@ class AlbaemCoTiCtrl(CounterTimerController):
         channel.
         """
         msg = "LoadOne({0}, {1}): Entering...".format(axis, value)
-        self._log.debug("LoadOne(%d, %f): Entering...", axis, value)
+        self._log.debug(msg)
+        print msg
         # TODO: This ... shouldn't be an if axis == 1 ?
         self._master = axis
 
         if self._integration_time != value:
             self._integration_time = value
-        try:
-            # TODO: Do we want this? Let's configure it by hand at the begining
-            # NOTE: Yes, we want this executed only one time, and not per axis.
-            if axis == 1:
-                self.AemDevice['AcqStop'] = '1'
-                # NOTE: if we don't wait a little bit, the acqtime is not configured.
-                time.sleep(0.5)
-                # TODO: Solve this bug: acqtime must be sent twice ... weird
-                # UPDATE: it's even worst ... it's not working ...
-                val = str(int(value * 1000))
-                #for i in range(2):
-                self.AemDevice['AcqTime'] = val
-            #
-            #     # TODO: This part is still not fully tested###########
-            #     # self.sampleRate = self.AemDevice['SampleRate'].value
-            #     # avSamples = value/self.sampleRate
-            #     #
-            #     # if avSamples > self.avSamplesMax:
-            #     #     self.sampleRate = value/self.avSamplesMax
-            #     #     self.AemDevice['SampleRate'] = self.sampleRate
-            #     #     avSamples = value/self.sampleRate
-            #     # #####################################################
-            #     avSamples = value  # needed while tests are pending
-            #     self.AemDevice['Avsamples'] = avSamples
-            #     self.AemDevice['TriggerPeriod'] = value
-            #     # added by zreszela 12.02.2013,
-            #     # trigger delay is set by conitnuous scan,
-            #     # in step scan it must be always 0
-            #     self.AemDevice['TriggerDelay'] = 0
-            #
-            #     # TODO: Check if this is still true
-            #     # WARNING: The next 1 + 1 is done like this to remember that it
-            #     #                         shoud be Points + 1 because the first
-            #     #                         trigger arrives at 0s
-            #     #                         at some point this will be changed in
-            #     #                         the albaem and we will remove the + 1
-            #     ###############################################################
-            #     self.AemDevice['BufferSize'] = 1 + 1
 
-            # else:
-            #     pass
-
-        except PyTango.DevFailed as e:
-            error_msg = 'Could not configure: {}'.format(self.Albaemname)
-            exception_msg = 'Exception: {}'.format(e)
-            msg = 'LoadOne({0}, {1}): {2}\n{3}'.format(axis, value,
-                                                       error_msg,
-                                                       exception_msg)
-            self._log.error(msg)
-            # TODO: Improve error handlig
-            raise
+        if axis == 1:
+            self.AemDevice['AcqStop'] = '1'
+            # NOTE: if we don't wait a little bit, the acqtime is not
+            # configured properly.
+            time.sleep(0.5)
+            val = str(int(value * 1000))
+            self.AemDevice['AcqTime'] = val
 
     # NOTE: Kind of ugly to have the definition and implementation in different
     #       files ... think about how to better connect them. The main problem
