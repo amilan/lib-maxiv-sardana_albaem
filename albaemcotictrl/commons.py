@@ -7,6 +7,6 @@ from sardana import State
 # State Map used to convert device server states into sardana states
 ALBAEM_STATE_MAP = {
                     'STATE_ACQUIRING': State.Moving,
-                    'STATE_ON': State.Standby,
-                    'STATE_RUNNING': State.On
+                    'STATE_ON': State.On,
+                    'STATE_RUNNING': State.Moving
                     }
