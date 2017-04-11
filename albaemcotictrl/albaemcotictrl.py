@@ -94,6 +94,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
         self._ConnectToAlbaEM()
         self._ReadStateAndStatus()
+        self._StopAcquisition()
+        self._ConfigureDefaultTrigger()
 
     @alert_problems
     def _ConnectToAlbaEM(self):
@@ -107,6 +109,13 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self.status = self.AemDevice.status()
         print '    Read State finished with state: {0}'.format(self.state)
         # NOTE: maybe we should handle also the state to Fault!!
+
+    @alert_problems
+    def _ConfigureDefaultTrigger(self):
+        self.AemDevice['NTrig'] = '1'
+        time.sleep(DEFAULT_SLEEP_TIME)
+        self.AemDevice['TriggerMode'] = '0'
+        time.sleep(DEFAULT_SLEEP_TIME)
 
     def AddDevice(self, axis):
         """Add device to controller."""
@@ -135,6 +144,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         print 'StateAll: {0}'.format(self.state)
         # TODO: Should be return status here? ...
         return self.state
+
 
 #    def PreReadOne(self, axis):
 #        self._log.debug("PreReadOne(%d): Entering...", axis)
@@ -186,7 +196,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._log.debug("ReadAll(): Entering...")
         # if self.state == PyTango.DevState.ON:
 
-        #if self.state is not State.Moving:
+        # if self.state is not State.Moving:
         #    self._SendSWTrigger()
 
         # TODO: This should be read in only one command, but extracting
@@ -283,6 +293,10 @@ class AlbaemCoTiCtrl(CounterTimerController):
         # even if it's already stopped.
 
         self.AemDevice['AcqStop'] = '1'
+        # TODO: this sleep is temporal, it should be remove. Is here just for
+        #       refactoring issues.
+        # time.sleep(DEFAULT_SLEEP_TIME)
+        print ' ... Acquisition stopped'
 
     def PreStartAllCT(self):
         """Configure acquisition before start it."""
@@ -290,7 +304,6 @@ class AlbaemCoTiCtrl(CounterTimerController):
         print 'PreStartAllCT(): Entering ...'
         self.acqchannels = []
 
-        # NOTE: If we only write the AcqStop attribute the method is useless
         self._StopAcquisition()
 
     def PreStartOneCT(self, axis):
@@ -324,29 +337,21 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         self._log.debug("StartAllCT(): Entering...")
         print 'StartAllCT(): Entering ...'
-        self.AemDevice['AcqStop'] = '1'
-        time.sleep(DEFAULT_SLEEP_TIME)
-        while self.state != State.On:
-            print '    ... State is not ON'
-            self._ReadStateAndStatus()
-        self.AemDevice['TriggerMode'] = '0'
-        time.sleep(DEFAULT_SLEEP_TIME)
-        # TODO: ensure this attribute is present in the DS
-        self.AemDevice['NTrig'] = '1'
-        time.sleep(DEFAULT_SLEEP_TIME)
+
+        # # TODO: This should be out, and managed in StateAll
+        # while self.state != State.On:
+        #     print '    ... State is not ON'
+        #     self._ReadStateAndStatus()
+
         self.AemDevice['AcqStart'] = '1'
-        time.sleep(DEFAULT_SLEEP_TIME)
+
         while self.state != State.Moving:
             print '    ... State is not Moving'
             self._ReadStateAndStatus()
-            # FIXME: If acquisition is fast enough you can miss this state and
-            #        get stuck in here. The increase of sleep to 0.2 workaround
-            #        it.
 
-        # We have to be sure that there is a State Transition
-        # if not, it may be possible that we return previous values
+        # NOTE: We have to be sure that there is a State Transition
+        #       if not, it may be possible that we return previous values
         self.AemDevice['SWTrigger'] = '1'
-        # time.sleep(.1)
 
     # TODO: Ensure that this method is needed.
     # def PreLoadOne(self, axis, value):
@@ -382,7 +387,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
             self.AemDevice['AcqStop'] = '1'
             # NOTE: if we don't wait a little bit, the acqtime is not
             # configured properly.
-            time.sleep(0.5)
+            # time.sleep(0.5)
+            time.sleep(DEFAULT_SLEEP_TIME)
             val = str(int(value * 1000))
             self.AemDevice['AcqTime'] = val
 
@@ -444,7 +450,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
 
     @alert_problems
     def getNrOfTriggers(self, axis):
-        nrOfTriggers = int(self.AemDevice["NData"].value)
+        nrOfTriggers = int(self.AemDevice['NTrig'].value)
         return nrOfTriggers
 
     # def getAcquisitionTime(self, axis):
@@ -503,16 +509,15 @@ class AlbaemCoTiCtrl(CounterTimerController):
         if value.lower() == "software":
             mode = "SOFTWARE"
             # STRING FOR MODE DOES NOT WORK...
-            mode = 0
+            mode = '0'
         if value.lower() == "hardware":
             mode = "HARDWARE"
             # STRING FOR MODE DOES NOT WORK...
-            mode = 1
+            mode = '1'
         self.AemDevice["TriggerMode"] = mode
 
-    # NOTE: Now it's read only.
-    # def setNrOfTriggers(self, axis, value):
-    #     self.AemDevice["BufferSize"] = value
+    def setNrOfTriggers(self, axis, value):
+        self.AemDevice["NTrig"] = str(value)
 
     # def setAcquisitionTime(self, axis, value):
     #     self.AemDevice["TriggerDelay"] = value

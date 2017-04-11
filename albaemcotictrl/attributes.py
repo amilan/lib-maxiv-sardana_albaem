@@ -66,7 +66,7 @@ EXTRA_ATTRIBUTES = {
                             Memorize: NotMemorized,
                             Access: DataAccess.ReadOnly,
                             FGet: 'getNrOfTriggers',
-                            # FSet: 'setNrOfTriggers'
+                            FSet: 'setNrOfTriggers'
                             },
                     # "SamplingFrequency": {
                     #         Type: float,
