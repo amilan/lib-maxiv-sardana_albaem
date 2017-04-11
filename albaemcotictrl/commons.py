@@ -10,3 +10,5 @@ ALBAEM_STATE_MAP = {
                     'STATE_ON': State.On,
                     'STATE_RUNNING': State.Moving
                     }
+
+DEFAULT_SLEEP_TIME = 0.2

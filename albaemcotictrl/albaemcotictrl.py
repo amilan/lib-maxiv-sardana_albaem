@@ -22,7 +22,7 @@ from sardana.pool.controller import CounterTimerController
 
 from sardana import State
 
-from commons import ALBAEM_STATE_MAP
+from commons import ALBAEM_STATE_MAP, DEFAULT_SLEEP_TIME
 from attributes import EXTRA_ATTRIBUTES
 from decorators import alert_problems
 
@@ -150,7 +150,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
             return self._integration_time
 
         # MMM.... THIS WILL ALWAYS BE TRUE!!!
-        #if self._measures is not []:
+        # if self._measures is not []:
         if len(self._measures) > 0:
             # TODO: Ensure that this is a valid value.
             meas = self._measures[axis-2]
@@ -194,6 +194,7 @@ class AlbaemCoTiCtrl(CounterTimerController):
         # NOTE: It's not ok to use the average current if the buffer hasn't
         # been cleaned after the previous scan. Is it cleared as the MEAS
         # attribute?
+
         self._measures = []
         for i in range(1, 5):
             # attribute_name = 'AverageCurrentCh{}'.format(i)
@@ -264,13 +265,13 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """Stop all the acquisitions."""
         self._log.debug("AbortAll(): Entering...")
         self._StopAcquisition()
-    
+
     @alert_problems
     def AbortOne(self, axis):
         """Stop all the acquisitions."""
         self._log.debug("AbortOne(%r): Entering..."%axis)
         self._StopAcquisition()
-  
+
     @alert_problems
     def _StopAcquisition(self):
         # NOTE: If we always send the AcqStop, we don't need to read the state
@@ -324,22 +325,28 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._log.debug("StartAllCT(): Entering...")
         print 'StartAllCT(): Entering ...'
         self.AemDevice['AcqStop'] = '1'
-        time.sleep(.1)
+        time.sleep(DEFAULT_SLEEP_TIME)
         while self.state != State.On:
+            print '    ... State is not ON'
             self._ReadStateAndStatus()
         self.AemDevice['TriggerMode'] = '0'
-        time.sleep(.1)
+        time.sleep(DEFAULT_SLEEP_TIME)
         # TODO: ensure this attribute is present in the DS
-        # self.AemDevice['NTrig'] = '1'
-        time.sleep(.1)
+        self.AemDevice['NTrig'] = '1'
+        time.sleep(DEFAULT_SLEEP_TIME)
         self.AemDevice['AcqStart'] = '1'
-        time.sleep(.1)
+        time.sleep(DEFAULT_SLEEP_TIME)
         while self.state != State.Moving:
+            print '    ... State is not Moving'
             self._ReadStateAndStatus()
+            # FIXME: If acquisition is fast enough you can miss this state and
+            #        get stuck in here. The increase of sleep to 0.2 workaround
+            #        it.
+
         # We have to be sure that there is a State Transition
         # if not, it may be possible that we return previous values
         self.AemDevice['SWTrigger'] = '1'
-        #time.sleep(.1)
+        # time.sleep(.1)
 
     # TODO: Ensure that this method is needed.
     # def PreLoadOne(self, axis, value):
