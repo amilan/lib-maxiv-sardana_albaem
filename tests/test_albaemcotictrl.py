@@ -20,7 +20,8 @@ __author__ = 'amilan'
 __docformat__ = 'restructuredtext'
 
 
-ALBAEM_DEVICE = 'ws/albaem/1'
+# ALBAEM_DEVICE = 'ws/albaem/1'
+ALBAEM_DEVICE = 'skippy/kitslab/albaem2-01'
 CTRL_POSSIBLE_STATES = [State.Standby, State.On, State.Moving]
 
 
