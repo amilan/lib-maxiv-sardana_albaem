@@ -23,7 +23,7 @@ From sources
 ------------
 
 If you want to install it directly from the sources, the first thing to do is
-to get the latest version of the software from [here](https://github.com/amilan/lib-maxiv-sardana_albaem)
+to get the latest version of the software from `here.<https://github.com/amilan/lib-maxiv-sardana_albaem>`
 
 You can download it in a zip file or just clone or fork the repository and after
 build and install the package.::
@@ -40,6 +40,9 @@ Configuration
 
 In order to use the sardana controller, first be sure that you have a Sardana
 instance running (either a Sardana or Pool and MacroServer devices running).
+
+Also you need to ensure that you have a Skippy Tango Device Server running and
+controlling your EM#. That device server will be the one used by the controller.
 
 For this example, we are going to use spock to define our new controller and its
 elements.

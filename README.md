@@ -37,6 +37,9 @@ added to the PoolPath property in your Pool.
 In order to use the sardana controller, first be sure that you have a Sardana
 instance running (either a Sardana or Pool and MacroServer devices running).
 
+Also you need to ensure that you have a Skippy Tango Device Server running and
+controlling your EM#. That device server will be the one used by the controller.
+
 For this example, we are going to use spock to define our new controller and its
 elements.
 
