@@ -4,8 +4,10 @@
 """Sardana Controller for the AlbaEM#."""
 
 import time
+import re
 
 import PyTango
+import taurus
 
 from sardana.pool.controller import CounterTimerController
 
@@ -13,11 +15,11 @@ from sardana import State
 
 from commons import ALBAEM_STATE_MAP, DEFAULT_SLEEP_TIME
 from attributes import EXTRA_ATTRIBUTES
-from decorators import alert_problems
+from decorators import alert_problems, timing_me
 
 __author__ = 'amilan'
 __docformat__ = 'restructuredtext'
-__all__ = ['AlbaemCoTiCtrl']
+__all__ = ('AlbaemCoTiCtrl')
 
 
 class AlbaemCoTiCtrl(CounterTimerController):
@@ -71,57 +73,103 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._StopAcquisition()
         self._ConfigureDefaultTrigger()
 
+        # regular expression to extract all values in an acquisition of only
+        # 1 trigger.
+        # TODO: refactor this reg. exp. to work with any number of triggers.
+        self._all_values = re.compile(r"-*\d+.\d+")
+
     @alert_problems
+    @timing_me
     def _ConnectToAlbaEM(self):
         """Method to initialize the communication channel with the EM."""
         # NOTE: ... thinking about a AlbaEMProxy class to handle the comms
         self.AemDevice = PyTango.DeviceProxy(self.Albaemname)
+        # self.AemDevice = taurus.Device(self.Albaemname)
 
     @alert_problems
+    @timing_me
     def _ReadStateAndStatus(self):
         """Method to update the state and status values."""
-        state = (self.AemDevice['AcqState'].value).strip()
+        # state = (self.AemDevice['AcqState'].value).strip()
+        state = self._get_aem_state()
+
         self.state = ALBAEM_STATE_MAP[state]
-        self.status = self.AemDevice.status()
-        print '    Read State finished with state: {0}'.format(self.state)
+
+        # self.status = self.AemDevice.status()
+        self._get_aem_status()
+
+        # print '    Read State finished with state: {0}'.format(self.state)
         # NOTE: maybe we should handle also the state to Fault!!
 
+        # NOTE: this return is used to debug the controller.
+        return self.state
+
+
+    # NOTE: temporal methods to test the execution time.
     @alert_problems
+    @timing_me
+    def _get_aem_state(self):
+        # state = (self.AemDevice['AcqState'].value).strip()
+        # state = (self.AemDevice.read_attribute('AcqState').value).strip()
+        state = self._just_read_the_value_please()
+        return state.strip()
+
+    @timing_me
+    def _just_read_the_value_please(self):
+        # import pdb
+        # pdb.set_trace()
+        state = self.AemDevice.read_attribute('AcqState').value
+        return state
+
+    @alert_problems
+    @timing_me
+    def _get_aem_status(self):
+        self.status = self.AemDevice.status()
+
+    @alert_problems
+    @timing_me
     def _ConfigureDefaultTrigger(self):
         """This method configures the trigger to be used by the EM."""
-        self.AemDevice['NTrig'] = '1'
+        # self.AemDevice['NTrig'] = '1'
+        self.AemDevice.write_attribute('Ntrig', '1')
         time.sleep(DEFAULT_SLEEP_TIME)
-        self.AemDevice['TriggerMode'] = '0'
+        # self.AemDevice['TriggerMode'] = '0'
+        self.AemDevice.write_attribute('TriggerMode', '0')
         time.sleep(DEFAULT_SLEEP_TIME)
 
+    @timing_me
     def AddDevice(self, axis):
         """Add device to controller."""
         self._log.debug("AddDevice(%d): Entering...", axis)
         self._channels.append(axis)
-        print 'Channel added: {}'.format(axis)
+        # print 'Channel added: {}'.format(axis)
         # NOTE: As far as I know, this is not needed now.
         # self.AemDevice.enableChannel(axis)
 
+    @timing_me
     def DeleteDevice(self, axis):
         """Delet device from the controller."""
         self._log.debug("DeleteDevice(%d): Entering...", axis)
         self._channels.remove(axis)
 
+    @timing_me
     def StateOne(self, axis):
         """Read state of one axis."""
         msg = 'StateOne({}): Entering ...'.format(axis)
         self._log.debug("StateOne(%d): Entering...", axis)
-        print msg
+        # print msg
         return (self.state, self.status)
 
+    @timing_me
     def StateAll(self):
         """Read state of all axis."""
         self._log.debug("StateAll(): Entering...")
         self._ReadStateAndStatus()
-        print 'StateAll: {0}'.format(self.state)
+        # print 'StateAll: {0}'.format(self.state)
         # TODO: Should be return status here? ...
         return self.state
 
+    @timing_me
     def ReadOne(self, axis):
         """
         Read the value of one axis.
@@ -131,30 +179,40 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         msg = "ReadOne({0}): Entering...".format(axis)
         self._log.debug(msg)
-        print msg
+        # print msg
         if axis == 1:
-            print '  Integration time = {0}'.format(self._integration_time)
+            # print '  Integration time = {0}'.format(self._integration_time)
             return self._integration_time
 
         if len(self._measures) > 0:
             # TODO: Ensure that this is a valid value.
             meas = self._measures[axis-2]
-            print '  Value for axis {0}: {1}'.format(axis, meas)
+            # print '  Value for axis {0}: {1}'.format(axis, meas)
             return meas
 
-
+    @timing_me
     def ReadAll(self):
         """Read all the axis."""
-        print 'ReadAll(): Entering ...'
+        # print 'ReadAll(): Entering ...'
         self._log.debug("ReadAll(): Entering...")
 
-        self._measures = []
-        for i in range(1, 5):
-            attribute_name = 'CurrentCh{0}'.format(i)
-            last_value = self._ExtractLastValue(attribute_name)
-            self._measures.append(last_value)
+        # self._measures = []
+        if self.state != State.Moving:
+            self._measures = self._extractAllValues()
+            # for i in range(1, 5):
+            #     attribute_name = 'CurrentCh{0}'.format(i)
+            #     last_value = self._ExtractLastValue(attribute_name)
+            #     self._measures.append(last_value)
 
     @alert_problems
+    @timing_me
+    def _extractAllValues(self):
+        values = self.AemDevice['Meas'].value
+        measures = [float(value) for value in self._all_values.findall(values)]
+        return measures
+
+    @alert_problems
+    @timing_me
     def _SendSWTrigger(self):
         """
         Method used to send a software trigger.
@@ -162,16 +220,25 @@ class AlbaemCoTiCtrl(CounterTimerController):
         If the EM is configured in order to use software triggers, this method
         will send one.
         """
-
         trigger_mode = self.AemDevice['TriggerMode'].value
         if trigger_mode.lower().strip() == 'software':
-            print '    Sending SWTrigger!'
-            self.AemDevice['SWTrigger'] = '1'
+            # print '    Sending SWTrigger!'
+            # self.AemDevice['SWTrigger'] = '1'
+            self.AemDevice.write_attribute('SWTrigger', '1')
 
     @alert_problems
+    @timing_me
+    def _sendTrigger(self):
+        """The main purpose of this method is to test the comms."""
+        # self.AemDevice['SWTrigger'] = '1'
+        self.AemDevice.write_attribute('SWTrigger', '1')
+
+    @alert_problems
+    @timing_me
     def _ExtractLastValue(self, attribute_name):
         """
-        This method read an attribute value and extract the relevant data.
+        Method to read an attribute value and extract the relevant data.
+
         :param attribute_name: String with the name of the attribute to be read.
         :return: Float with the actual value read.
         """
@@ -182,12 +249,14 @@ class AlbaemCoTiCtrl(CounterTimerController):
         return float(last_value)
 
     @alert_problems
+    @timing_me
     def AbortAll(self):
         """Stop all the acquisitions."""
         self._log.debug("AbortAll(): Entering...")
         self._StopAcquisition()
 
     @alert_problems
+    @timing_me
     def AbortOne(self, axis):
         """
         Stop all the acquisitions.
@@ -198,24 +267,29 @@ class AlbaemCoTiCtrl(CounterTimerController):
         self._StopAcquisition()
 
     @alert_problems
+    @timing_me
     def _StopAcquisition(self):
         """Stop data acquisition in the EM."""
-        self.AemDevice['AcqStop'] = '1'
+        # self.AemDevice['AcqStop'] = '1'
+        self.AemDevice.write_attribute('AcqStop', '1')
         self._log.debug(' ... Acquisition stopped')
 
+    @timing_me
     def PreStartAllCT(self):
         """Configure acquisition before start it."""
         self._log.debug("PreStartAllCT(): Entering...")
-        print 'PreStartAllCT(): Entering ...'
+        # print 'PreStartAllCT(): Entering ...'
         self.acqchannels = []
 
         self._StopAcquisition()
 
+    @timing_me
     def PreStartOneCT(self, axis):
         """To be executed before an axis acquisition."""
         return True
 
     @alert_problems
+    @timing_me
     def StartAllCT(self):
         """Start acquisition for all channels in the electrometer.
 
@@ -223,24 +297,36 @@ class AlbaemCoTiCtrl(CounterTimerController):
         master channel.
         """
         self._log.debug("StartAllCT(): Entering...")
-        print 'StartAllCT(): Entering ...'
+        # print 'StartAllCT(): Entering ...'
 
         # # TODO: This should be out, and managed in StateAll
         # while self.state != State.On:
-        #     print '    ... State is not ON'
+        #     # print '    ... State is not ON'
         #     self._ReadStateAndStatus()
 
-        self.AemDevice['AcqStart'] = '1'
+        # self.AemDevice['AcqStart'] = '1'
+        self._startAcquisition()
+        # time.sleep(0.3)
 
+        print '    State before while: {0}'.format(self.state)
         while self.state != State.Moving:
-            print '    ... State is not Moving'
+            # print '    ... State is not Moving'
             self._ReadStateAndStatus()
-
+        print '    State after while: {0}'.format(self.state)
         # NOTE: We have to be sure that there is a State Transition
         #       if not, it may be possible that we return previous values
-        self.AemDevice['SWTrigger'] = '1'
+        #self.AemDevice['SWTrigger'] = '1'
+        self._sendTrigger()
 
     @alert_problems
+    @timing_me
+    def _startAcquisition(self):
+        # self.AemDevice['AcqStart'] = '1'
+        self.AemDevice.write_attribute('AcqStart', '1')
+
+
+    @alert_problems
+    @timing_me
     def LoadOne(self, axis, value):
         """
         Load one axis in controller.
@@ -256,19 +342,21 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         msg = "LoadOne({0}, {1}): Entering...".format(axis, value)
         self._log.debug(msg)
-        print msg
+        # print msg
         # TODO: This ... shouldn't be an if axis == 1 ?
         self._master = axis
 
         self._integration_time = value
 
         if axis == 1:
-            self.AemDevice['AcqStop'] = '1'
+            # self.AemDevice['AcqStop'] = '1'
+            self.AemDevice.write_attribute('AcqStop', '1')
             # NOTE: if we don't wait a little bit, the acqtime is not
             # configured properly.
             time.sleep(DEFAULT_SLEEP_TIME)
             val = str(int(value * 1000))
-            self.AemDevice['AcqTime'] = val
+            # self.AemDevice['AcqTime'] = val
+            self.AemDevice.write_attribute('AcqTime', val)
 
     # NOTE: Kind of ugly to have the definition and implementation in different
     #       files ... think about how to better connect them. The main problem
@@ -393,7 +481,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         self.ranges[axis-2] = value
         attr = 'CARangeCh{0}' + str(axis-1)
-        self.AemDevice[attr] = str(value)
+        # self.AemDevice[attr] = str(value)
+        self.AemDevice.write_attribute(attr, str(value))
 
     @alert_problems
     def setFilter(self, axis, value):
@@ -405,7 +494,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         self.filters[axis-2] = value
         attr = 'CAFilterCh{0}' + str(axis-1)
-        self.AemDevice[attr] = str(value)
+        # self.AemDevice[attr] = str(value)
+        self.AemDevice.write_attribute(attr, str(value))
 
     @alert_problems
     def setInversion(self, axis, value):
@@ -417,7 +507,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         """
         self.dinversions[axis-2] = value
         attr = 'CAInversionCh{0}' + str(axis-1)
-        self.AemDevice[attr] = str(value)
+        # self.AemDevice[attr] = str(value)
+        self.AemDevice.write_attribute(attr, str(value))
 
     # TODO: update this method when attribute available in DS
     # def setOffset(self, axis, value):
@@ -454,7 +545,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
             mode = '0'
         if value.lower() == "hardware":
             mode = '1'
-        self.AemDevice["TriggerMode"] = mode
+        # self.AemDevice["TriggerMode"] = mode
+        self.AemDevice.write_attribute('TriggerMode', mode)
 
     def setNrOfTriggers(self, axis, value):
         """
@@ -463,7 +555,8 @@ class AlbaemCoTiCtrl(CounterTimerController):
         :param axis: Channel number to be set. (Doesn't really matter.)
         :param value: Number of triggers to be set.
         """
-        self.AemDevice["NTrig"] = str(value)
+        # self.AemDevice["NTrig"] = str(value)
+        self.AemDevice.write_attribute('NTrig', str(value))
 
     # def setAcquisitionTime(self, axis, value):
     #     self.AemDevice["TriggerDelay"] = value

@@ -6,6 +6,7 @@ from functools import wraps
 import traceback
 import PyTango
 import sys
+import time
 
 
 def alert_problems(meth):
@@ -45,3 +46,18 @@ def alert_problems(meth):
             print '{0:-^79}'.format('')
 
     return _alert_problems
+
+DEFAULT_FMT = '[{elapsed: 0.8f}s] {name}({args}) -> {result}'
+
+def timing_me(meth, fmt=DEFAULT_FMT):
+    @wraps(meth)
+    def timed(self, *args, **kwargs):
+        t0 = time.time()
+        _result = meth(self, *args, **kwargs)
+        elapsed = time.time() - t0
+        name = meth.__name__
+        args = ', '.join(repr(args) for arg in args)
+        result = repr(_result)
+        print fmt.format(**locals())
+        return _result
+    return timed
