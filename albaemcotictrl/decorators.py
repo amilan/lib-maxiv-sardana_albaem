@@ -49,7 +49,7 @@ def alert_problems(meth):
 
 DEFAULT_FMT = '[{elapsed: 0.8f}s] {name}({args}) -> {result}'
 
-def timing_me(meth, fmt=DEFAULT_FMT):
+def time_it(meth, fmt=DEFAULT_FMT):
     @wraps(meth)
     def timed(self, *args, **kwargs):
         t0 = time.time()
